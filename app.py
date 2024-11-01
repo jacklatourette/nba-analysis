@@ -243,8 +243,55 @@ class Tasks:
         ).show(max_rows=300, max_width=500)
 
     def task_6(self):
-        """I went over the time limit and did not get to this task. Apologies, I got stuck with rate limit issues with the API."""
-        return
+        """I went over the time limit, wanted to do it anyways. Apologies, I got stuck with rate limit issues with the API."""
+        return duckdb.sql(
+            """
+            WITH PointsAllowed AS (
+                SELECT 
+                    g.season,
+                    t.team_name,
+                    COUNT(t.team_name) AS games_played,
+                    SUM(
+                        CASE
+                            WHEN t.team_name = g.home_team THEN g.away_score
+                            WHEN t.team_name = g.away_team THEN g.home_score
+                            ELSE NULL END
+                    ) AS points_allowed
+                FROM teams.parquet t
+                JOIN games.parquet g ON t.team_name = g.home_team OR t.team_name = g.away_team
+                WHERE CAST(LEFT(season, 4) as int) >= YEAR(current_date) - 10
+                GROUP BY g.season, t.team_name
+                ORDER BY t.team_name, g.season
+            ),
+            PointsScored AS (
+                SELECT 
+                    g.season,
+                    t.team_name,
+                    COUNT(t.team_name) AS games_played,
+                    SUM(
+                        CASE
+                            WHEN t.team_name = g.home_team THEN g.home_score
+                            WHEN t.team_name = g.away_team THEN g.away_score
+                            ELSE NULL END
+                    ) AS points_scored
+                FROM teams.parquet t
+                JOIN games.parquet g ON t.team_name = g.home_team OR t.team_name = g.away_team
+                WHERE CAST(LEFT(season, 4) as int) >= YEAR(current_date) - 10
+                GROUP BY g.season, t.team_name
+                ORDER BY t.team_name, g.season
+            )
+            SELECT
+                ps.team_name as team_name,
+                ps.season as season,
+                pa.games_played,
+                ROUND(ps.points_scored / ps.games_played, 2) as avg_points_scored,
+                ROUND(pa.points_allowed / pa.games_played, 2) as avg_points_allowed
+            FROM PointsScored ps
+            JOIN PointsAllowed pa ON ps.team_name = pa.team_name AND ps.season = pa.season
+
+            ORDER BY ps.team_name, pa.season
+        """
+        ).show(max_rows=300, max_width=500)
 
 
 if __name__ ==  """__main__""":
